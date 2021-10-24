@@ -1197,7 +1197,12 @@ Linux内核的进程控制块PCB是一个结构体，task_struct，除了包含�
 
 <font color = "red">注意：9）SIGKILL和19）SIGSTOP，不允许忽略和捕捉，只能执行默认。甚至不能阻塞</font>
 
+**快捷键产生的信号**
 
+ctrl-c 发送 SIGINT 信号给前台进程组中的所有进程。常用于终止正在运行的程序。
+ctrl-z 发送 SIGTSTP 信号给前台进程组中的所有进程，常用于挂起一个进程。
+ctrl-d 不是发送信号，而是表示一个特殊的二进制值，表示 EOF。
+ctrl-\ 发送 SIGQUIT 信号给前台进程组中的所有进程，终止前台进程并生成 core 文件。
 
 kill -l查看消息类型
 
@@ -1687,6 +1692,8 @@ int sigsuspend(const sigset_t*sigmask);
 
 #### 6.3.1、示例
 
+打印未决信号集
+
 ~~~c
 #include <stdio.h>
 #include <unistd.h>
@@ -1714,7 +1721,10 @@ int main()
 	sigset_t myset, oldset, ped;
 	sigemptyset(&myset);
 	sigaddset(&myset, SIGQUIT); //屏蔽信号3
-
+	sigaddset(&myset, SIGINT);
+    sigaddset(&myset, SIGTSTP);
+    sigaddset(&myset, SIGSGEV);
+    sigaddset(&myset, SIGTSTP);
 	int ret = sigprocmask(SIG_BLOCK, &myset, &oldset);
 	if(ret == -1)
 	{
@@ -1732,9 +1742,9 @@ int main()
 
 
 
-### 6.4、sigaction
+### 6.4、sigaction（信号的捕获2）
 
-
+#### 6.4.1、概念
  signal 函数的使用方法简单，但并不属于 POSIX 标准，在各类 UNIX 平台上的实现不尽相同，因此其用途受
 
 到了一定的限制。而 POSIX 标准定义的信号处理接口是 sigaction 函数，其接口头文件及原型如下：
@@ -1771,6 +1781,41 @@ sa_sigaction：当sa_flags被指定为SA_SIGINFO标志时，使用该信号处�
 1. sa_handler：指定信号捕捉后的处理函数名（即注册函数）。也可赋值为SIG_IGN表忽略或SIG_DFL表执行默认动作。
 2. sa_mask：调用信号处理函数时，所需要屏蔽的信号集合（信号屏蔽字）。注意：仅在处理函数被调用期间屏蔽生效，是临时性装置。
 3. sa_flags：通常设置为0，表示使用默认属性。
+
+#### 6.4.2、示例
+
+~~~c
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <signal.h>
+
+void docatch(int signo)
+{
+	sleep(2);
+	printf("%d signal is catched\n", signo);
+}
+
+int main()
+{
+	struct sigaction act;
+	act.sa_handler = docatch;
+	sigemptyset(&act.sa_mask);
+	sigaddset(&act.sa_mask, SIGQUIT);
+	act.sa_flags = 0; //默认属性 信号捕捉函数执行期间，自动屏蔽本信号
+	int ret = sigaction(SIGINT, &act, NULL);
+	if(ret < 0)
+	{
+		perror("sigaction error");
+		exit(1);
+	}
+	while(1);
+	return 0;
+}
+
+~~~
+
+
 
 ## 6.5、信号捕捉特性
 
