@@ -436,6 +436,8 @@ X 死亡状态 ；
 
 ## 僵尸进程
 
+[Linux中的僵尸进程详解](https://juejin.cn/post/7016499432703131678)
+
 **僵尸进程对系统有害吗？**
 
 **不会**。由于僵尸进程并不做任何事情， 不会使用任何资源也不会影响其它进程， 因此存在僵尸进程也没什么坏处。 不过由于进程表中的退出状态以及其它一些进程信息也是存储在内存中的，因此存在太多僵尸进程有时也会是一些问题。
@@ -672,7 +674,17 @@ int main(int argc,char* argv[])
 
 ~~~
 
+<font color = "red">使用信号回收?</font>
 
+[信号捕捉函数与exec](http://t.zoukankan.com/yiyide266-p-13706799.html)
+
+<font color = "red">fork之后，子进程虽然会继承父进程的“信号屏蔽和安排”，但是exec后，只有“被忽略的信号”和“设置为默认”处理行为是被保留的，被用户修改自定义函数动作的信号安排会被内核设置为系统默认动作，原因是exec后进程的上下文被替换成了被执行程序的上下文，而被替换的上下文恰恰就包括exec之前定义过的函数，此时传到信号处理函数的函数指针可能已经指向了一个无效的空间。所以在执行一个程序时，系统会把被修改为自定义函数动作的信号改为默认动作或忽略，除非这个信号在exec之前被用户设置为忽略。来看看《APUE》第10.3节是怎么说的：</font>
+
+<font color = "red">当执行一个程序时，所有信号的状态都是系统默认或忽略。通常所有信号都被设置为它们的默认动作，除非调用exec的进程忽略该信号。确切地讲，exec函数将原先设置为要捕捉的信号都更改为默认动作，其他信号的状态则不变（一个进程原先要捕捉的信号，当其执行一个新程序后，就不能再捕捉了，因为信号捕捉函数的地址很可能在所执行的新程序文件中已无意义）。</font>
+
+当一个进程调用fork时，因为子进程在开始时复制父进程的存储映像，信号捕捉函数的地址在子进程中是有意义的，所以子进程继承父进程的信号处理方式。
+
+当子进程调用exec后，因为exec运行新的程序后会覆盖从父进程继承来的存储映像，那么信号捕捉函数在新程序中已无意义，所以exec会将原先设置为要捕捉的信号都更改为默认动作。
 
 ##### 1.1.2.3、兄弟进程
 
@@ -3145,7 +3157,7 @@ int pthread_cancel(pthread_t thread); 成功：0；失败：错误号
 
 类似于玩游戏存档，必须到达指定的场所(存档点，如：客栈、仓库、城里等)才能存储进度。杀死线程也不是立刻就能完成，必须要到达取消点。
 
-取消点：是线程检查是否被取消，并按请求进行动作的一个位置。通常是一些系统调用creat，open，pause，close，read，write..... 执行命令man 7 pthreads可以查看具备这些取消点的系统调用列表。也可参阅 APUE.12.7 取消选项小节。
+<font color = "red">取消点：是线程检查是否被取消，并按请求进行动作的一个位置。通常是一些系统调用creat，open，pause，close，read，write..... 执行命令man 7 pthreads可以查看具备这些取消点的系统调用列表。也可参阅 APUE.12.7 取消选项小节。</font>
 
 可粗略认为一个系统调用(进入内核)即为一个取消点。如线程中没有取消点，可以通过调用pthreestcancel函数自行设置一个取消点。
 
@@ -3599,6 +3611,8 @@ lock加锁失败会阻塞，等待锁释放。
 
 trylock加锁失败直接返回错误号（如：EBUSY），不阻塞。
 
+### 2.3、示例
+
 ~~~c
 //pthread_sync_test.c
 #include <stdio.h>
@@ -3720,6 +3734,36 @@ int main()
 	return 0;
 }
 
+//避免死锁
+int main()
+{
+	pthread_t tid;
+
+	pthread_mutex_init(&mutex1, NULL);
+	pthread_mutex_init(&mutex2, NULL);
+
+
+	pthread_create(&tid, NULL, tfn, NULL);
+	pthread_mutex_lock(&mutex2);
+	printf("HELLO\n");
+	sleep(1);
+
+	int ret = pthread_mutex_trylock(&mutex1);
+	if(ret != 0)
+	{
+		pthread_mutex_unlock(&mutex2);
+	}
+	else
+	{
+		printf("WORLD\n");
+		pthread_mutex_unlock(&mutex1);
+		pthread_mutex_unlock(&mutex2);
+	}
+	sleep(1);
+	pthread_mutex_destroy(&mutex1);
+	pthread_mutex_destroy(&mutex2);
+	return 0;
+}
 
 ~~~
 
@@ -3738,17 +3782,616 @@ int main()
 3. 不加锁状态
 
 读写锁特性：
-读写锁是“写模式加锁”时， 解锁前，所有对该锁加锁的线程都会被阻塞。
-读写锁是“读模式加锁”时， 如果线程以读模式对其加锁会成功；如果线程以写模式加锁会阻塞。
-读写锁是“读模式加锁”时， 既有试图以写模式加锁的线程，也有试图以读模式加锁的线程。那么读写锁会阻塞随后的读模式锁请求。优先满足写模式锁。读锁、写锁并行阻塞，写锁优先级高
-读写锁也叫共享-独占锁。当读写锁以读模式锁住时，它是以共享模式锁住的；当它以写模式锁住时，它是以独占模式锁住的。写独占、读共享。
+
+1. 读写锁是“写模式加锁”时， 解锁前，所有对该锁加锁的线程都会被阻塞。
+2. 读写锁是“读模式加锁”时， 如果线程以读模式对其加锁会成功；如果线程以写模式加锁会阻塞。
+3. 读写锁是“读模式加锁”时， 既有试图以写模式加锁的线程，也有试图以读模式加锁的线程。那么读写锁会阻塞随后的读模式锁请求。
+
+
+
+
+
+优先满足写模式锁。读锁、写锁并行阻塞，写锁优先级高
+读写锁也叫共享-独占锁。当读写锁以读模式锁住时，它是以共享模式锁住的；当它以写模式锁住时，它是以独占模式锁住的。<font color = "red">写独占、读共享</font>。
 
 读写锁非常适合于对数据结构读的次数远大于写的情况。
+
+[02Linux下C语言锁的学习之Linux下的读写锁](https://blog.csdn.net/weixin_44517656/article/details/110947611)
+
+读写锁的特性：
+
+1）若一把锁被一个线程以读方式锁住，当其它线程以读方式上锁的话，那么可以上锁成功。
+
+2）若一把锁被一个线程以写方式锁住，当其它线程以读或者写方式上锁的话，都会被阻塞。
+
+要注意的是：多个线程同时请求锁时，请求读方式的线程会被放在请求写方式的线程后面；若不是同时请求上锁，读方式先请求的则先等已经上锁的线程处理后再处理(当然如果该线程以读方式上锁可以同时进行)，即使后面再有写请求也要等其完成才能上锁。 这里的同时和不是同时很重要。
+
+实际上上面的意思可以总结为：
+
+**读时共享，写时阻塞(独占)，写锁优先级高，注意同时与非同时字眼，注意目前以何种方式上锁。**
+
+### 4.1、主要应用函数：
+`pthread_rwlock_init`函数
+
+`pthread_rwlock_destroy`函数
+
+`pthread_rwlock_rdlock`函数  
+
+`pthread_rwlock_wrlock`函数
+
+`pthread_rwlock_tryrdlock`函数
+
+`pthread_rwlock_trywrlock`函数
+
+`pthread_rwlock_unlock`函数
+
+以上7 个函数的返回值都是：成功返回0， 失败直接返回错误号。
+
+`pthread_rwlock_t`类型 用于定义一个读写锁变量。
+
+`pthread_rwlock_t rwlock;`
+
+**pthread_rwlock_init函数**
+
+初始化一把读写锁
+
+`int pthread_rwlock_init(pthread_rwlock_t *restrict rwlock, const pthread_rwlockattr_t *restrict attr);`
+
+参2：attr表读写锁属性，通常使用默认属性，传NULL即可。
+
+**pthread_rwlock_destroy函数**
+
+销毁一把读写锁
+
+`int pthread_rwlock_destroy(pthread_rwlock_t *rwlock);`
+
+**pthread_rwlock_rdlock函数**
+
+以读方式请求读写锁。（常简称为：请求读锁）
+
+`int pthread_rwlock_rdlock(pthread_rwlock_t *rwlock);`
+
+**pthread_rwlock_wrlock函数**
+
+以写方式请求读写锁。（常简称为：请求写锁）
+
+`int pthread_rwlock_wrlock(pthread_rwlock_t *rwlock);`
+
+**pthread_rwlock_unlock函数**
+
+解锁
+
+`int pthread_rwlock_unlock(pthread_rwlock_t *rwlock);`
+
+**pthread_rwlock_tryrdlock函数**
+
+非阻塞以读方式请求读写锁（非阻塞请求读锁）
+
+`int pthread_rwlock_tryrdlock(pthread_rwlock_t *rwlock);`
+
+**pthread_rwlock_trywrlock函数**
+
+非阻塞以写方式请求读写锁（非阻塞请求写锁）
+
+`int pthread_rwlock_trywrlock(pthread_rwlock_t *rwlock);`
+
+### 4.2、示例
+
+~~~c
+//rwlock.c
+#include <stdio.h>
+#include <unistd.h>
+#include <pthread.h>
+
+int counter;
+pthread_rwlock_t rwlock;
+
+void *th_write(void *arg)
+{
+	int t;
+	int i = (int)arg;
+	while(1)
+	{
+		t = counter;
+		usleep(1000);
+
+		pthread_rwlock_wrlock(&rwlock);
+		printf("-------write %d: %lu: counter = %d ++counter = %d\n", i, pthread_self(), t, ++counter);
+		pthread_rwlock_unlock(&rwlock);
+
+		usleep(5000);
+	}
+	return NULL;
+}
+
+void *th_read(void *arg)
+{
+	int i = (int)arg;
+	while(1)
+	{
+
+		pthread_rwlock_rdlock(&rwlock);
+		printf("-------read %d: %lu: counter = %d\n", i, pthread_self(), counter);
+		pthread_rwlock_unlock(&rwlock);
+
+		usleep(900);
+	}
+	return NULL;
+}
+
+int main()
+{
+	int i;
+	pthread_t tid[8];
+
+	pthread_rwlock_init(&rwlock, NULL);
+
+	for(i = 0; i < 3; i++)
+	{
+		pthread_create(&tid[i], NULL, th_write, (void*)i);
+	}
+
+	for(i = 0; i < 5; i++)
+	{
+		pthread_create(&tid[i+3], NULL, th_read, (void*)i);
+	}
+
+	for(i = 0; i < 8; i++)
+	{
+		pthread_join(tid[i], NULL);
+	}
+
+	pthread_rwlock_destroy(&rwlock);
+	
+	return 0;
+}
+
+~~~
+
+## 5、条件变量：
+条件变量本身不是锁！但它也可以造成线程阻塞。通常与互斥锁配合使用。给多线程提供一个会合的场所。
+
+### 5.1、主要应用函数：
+`pthread_cond_init函数`
+
+`pthread_cond_destroy函数`
+
+`pthread_cond_wait函
+
+`pthread_cond_timedwait函数`
+
+`pthread_cond_signal函数`
+
+`pthread_cond_broadcast函`
+
+以上6 个函数的返回值都是：成功返回0， 失败直接返回错误号。
+
+`pthread_cond_t`类型 用于定义条件变量
+
+`pthread_cond_t cond`;
+
+**pthread_cond_init函数**
+
+初始化一个条件变量
+
+`int pthread_cond_init(pthread_cond_t *restrict cond, const pthread_condattr_t *restrict attr);`
+
+参2：attr表条件变量属性，通常为默认值，传NULL即可
+
+也可以使用静态初始化的方法，初始化条件变量：
+
+`pthread_cond_t cond = PTHREAD_COND_INITIALIZER;`
+
+**pthread_cond_destroy函数**
+
+销毁一个条件变量
+
+`int pthread_cond_destroy(pthread_cond_t *cond);`
+
+**pthread_cond_wait函数**
+
+阻塞等待一个条件变量
+
+`int pthread_cond_wait(pthread_cond_t *restrict cond, pthread_mutex_t *restrict mutex);`
+
+函数作用：
+
+1. 阻塞等待条件变量cond（参1）满足
+2. 释放已掌握的互斥锁（解锁互斥量）相当于pthread_mutex_unlock(&mutex);
+    <font color = "red">1.2.两步为一个原子操作。</font>
+3. 当被唤醒，pthread_cond_wait函数返回时，解除阻塞并重新申请获取互斥锁pthread_mutex_lock(&mutex);
+
+**pthread_cond_timedwait函数**
+
+限时等待一个条件变量
+
+`int pthread_cond_timedwait(pthread_cond_t *restrict cond, pthread_mutex_t *restrict mutex, const struct timespec *restrict abstime);`
+
+参3： 参看man sem_timedwait函数，查看struct timespec结构体。
+
+~~~c
+struct timespec {
+time_t tv_sec; /* seconds */ 秒
+long   tv_nsec; /* nanosecondes*/ 纳秒
+}
+~~~
+
+
+
+形参abstime：绝对时间。
+
+如：time(NULL)返回的就是绝对时间。而alarm(1)是相对时间，相对当前时间定时1秒钟。
+
+~~~c
+struct timespec t = {1, 0};
+
+pthread_cond_timedwait (&cond, &mutex, &t); 只能定时到 1970年1月1日 00:00:01秒(早已经过去) 
+~~~
+
+正确用法：
+
+~~~c
+time_t cur = time(NULL); 获取当前时间。
+
+struct timespec t; 定义timespec 结构体变量t
+
+t.tv_sec = cur+1; 定时1秒
+
+pthread_cond_timedwait (&cond, &mutex, &t); 传参 参APUE.11.6线程同步条件变量小节
+~~~
+
+
+
+在讲解setitimer函数时我们还提到另外一种时间类型：
+
+        struct timeval {
+             time_t      tv_sec;  /* seconds */ 秒
+    
+             suseconds_t tv_usec; /* microseconds */ 微秒
+    
+        };
+
+**pthread_cond_signal函数**
+
+唤醒至少一个阻塞在条件变量上的线程
+
+~~~c
+int pthread_cond_signal(pthread_cond_t *cond);
+
+pthread_cond_broadcast函数
+~~~
+
+
+
+唤醒全部阻塞在条件变量上的线程
+
+`int pthread_cond_broadcast(pthread_cond_t *cond);`
+
+### 5.2、生产者消费者条件变量模型
+
+线程同步典型的案例即为生产者消费者模型，而借助条件变量来实现这一模型，是比较常见的一种方法。假定有两个线程，一个模拟生产者行为，一个模拟消费者行为。两个线程同时操作一个共享资源（一般称之为汇聚），生产向其中添加产品，消费者从中消费掉产品。
+
+看如下示例，使用条件变量模拟生产者、消费者问题：
+
+### 5.3、代码示例
+
+~~~c
+#include <pthread.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+struct msg{
+	struct msg *next;
+	int num;
+};
+
+struct msg *head;
+struct msg *mp;
+
+pthread_cond_t has_product = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+
+void * consumer(void *p)
+{
+	for(;;)
+	{
+		pthread_mutex_lock(&lock);
+		while(head == NULL)
+		{
+			pthread_cond_wait(&has_product, &lock);
+		}
+
+		mp = head;
+		head = mp->next;
+
+		pthread_mutex_unlock(&lock);
+
+		printf("-consumer --- %d\n", mp->num);
+		free(mp);
+		sleep(rand() % 5);
+	}
+}
+
+void * producer(void *p)
+{
+	for(;;)
+	{
+		mp = malloc(sizeof(struct msg));
+		mp->num = rand() % 1000 + 1;
+		printf("-Produce ---%d\n", mp->num);
+
+		pthread_mutex_lock(&lock);
+		mp->next = head;
+		head = mp;
+		pthread_mutex_unlock(&lock);
+
+		pthread_cond_signal(&has_product);
+		sleep(rand() % 5);
+	}
+}
+
+int main()
+{
+	pthread_t pid, cid;
+	srand(time(NULL));
+
+	pthread_create(&pid, NULL, producer, NULL);
+	pthread_create(&cid, NULL, consumer, NULL);
+
+	pthread_join(pid, NULL);
+	pthread_join(cid, NULL);
+	
+	return 0;
+}
+
+~~~
+
+
+
+### 5.4、条件变量的优点：
+相较于mutex而言，条件变量可以减少竞争。
+
+如直接使用mutex，除了生产者、消费者之间要竞争互斥量以外，消费者之间也需要竞争互斥量，但如果汇聚（链表）中没有数据，消费者之间竞争互斥锁是无意义的。有了条件变量机制以后，只有生产者完成生产，才会引起消费者之间的竞争。提高了程序效率。
+
+## 6、信号量
+
+进化版的互斥锁（1 --> N）
+
+由于互斥锁的粒度比较大，如果我们希望在多个线程间对某一对象的部分数据进行共享，使用互斥锁是没有办法实现的，只能将整个数据对象锁住。这样虽然达到了多线程操作共享数据时保证数据正确性的目的，却无形中导致线程的并发性下降。线程从并行执行，变成了串行执行。与直接使用单进程无异。
+
+信号量，是相对折中的一种处理方式，既能保证同步，数据不混乱，又能提高线程并发。
+
+### 6.1、主要应用函数：
+sem_init函数
+
+sem_destroy函数
+
+sem_wait函数
+
+sem_trywait函数
+
+sem_timedwait函数
+
+sem_post函数
+
+以上6 个函数的返回值都是：成功返回0， 失败返回-1，同时设置errno。(注意，它们没有pthread前缀)
+
+sem_t类型，本质仍是结构体。但应用期间可简单看作为整数，忽略实现细节（类似于使用文件描述符）。
+
+sem_t sem; 规定信号量sem不能 < 0。头文件 <semaphore.h>
+
+### 6.2、信号量基本操作：
+
+sem_wait: 1. 信号量大于0，则信号量-- （类比pthread_mutex_lock）
+
+  |               2. 信号量等于0，造成线程阻塞
+
+对应
+
+  |
+
+sem_post： 将信号量++，同时唤醒阻塞在信号量上的线程 （类比pthread_mutex_unlock）
+
+但，由于sem_t的实现对用户隐藏，所以所谓的++、--操作只能通过函数来实现，而不能直接++、--符号。
+
+<font color = "red">信号量的初值，决定了占用信号量的线程的个数。</font>
+
+**sem_init函数**
+
+初始化一个信号量
+
+int sem_init(sem_t *sem, int pshared, unsigned int value);
+
+参1：sem信号量
+
+参2：pshared取0用于线程间；取非0（一般为1）用于进程间
+
+参3：value指定信号量初值
+
+**sem_destroy函数**
+
+销毁一个信号量
+
+int sem_destroy(sem_t *sem);
+
+sem_wait函数
+
+给信号量加锁 --
+
+int sem_wait(sem_t *sem);
+
+**sem_post函数**
+
+给信号量解锁 ++
+
+ int sem_post(sem_t *sem);
+
+**sem_trywait函数**
+
+尝试对信号量加锁 -- (与sem_wait的区别类比lock和trylock)
+
+ int sem_trywait(sem_t *sem);
+
+**sem_timedwait函数**
+
+限时尝试对信号量加锁 --
+
+int sem_timedwait(sem_t *sem, const struct timespec *abs_timeout);
+
+参2：abs_timeout采用的是绝对时间。
+
+定时1秒：
+
+time_t cur = time(NULL); 获取当前时间。
+
+struct timespec t; 定义timespec 结构体变量t
+
+t.tv_sec = cur+1; 定时1秒
+
+t.tv_nsec = t.tv_sec +100;
+
+sem_timedwait(&sem, &t); 传参
+
+生产者消费者信号量模型
+【练习】：使用信号量完成线程间同步，模拟生产者，消费者问题。 【sem_product_consumer.c】
+
+分析：
+
+规定： 如果□中有数据，生产者不能生产，只能阻塞。
+
+如果□中没有数据，消费者不能消费，只能等待数据。
+
+定义两个信号量：S满 = 0， S空 = 1 （S满代表满格的信号量，S空表示空格的信号量，程序起始，格子一定为空）
+
+所以有： T生产者主函数 { T消费者主函数 {
+      sem_wait(S空);      sem_wait(S满);
+
+     生产....        消费....
+    
+      sem_post(S满);      sem_post(S空);
+
+} }
+
+假设： 线程到达的顺序是:T生、T生、T消。
+
+那么： T生1 到达，将S空-1，生产，将S满+1
+
+T生2 到达，S空已经为0， 阻塞
+
+T消  到达，将S满-1，消费，将S空+1
+
+三个线程到达的顺序是：T生1、T生2、T消。而执行的顺序是T生1、T消、T生2
+
+这里，S空 表示空格子的总数，代表可占用信号量的线程总数-->1。其实这样的话，信号量就等同于互斥锁。
+
+但，如果S空=2、3、4……就不一样了，该信号量同时可以由多个线程占用，不再是互斥的形式。因此我们说信号量是互斥锁的加强版。
+
+【推演练习】： 理解上述模型，推演，如果是两个消费者，一个生产者，是怎么样的情况。
+
+【作业】：结合生产者消费者信号量模型，揣摩sem_timedwait函数作用。编程实现，一个线程读用户输入， 另一个线程打印“hello world”。如果用户无输入，则每隔5秒向屏幕打印一个“hello world”；如果用户有输入，立刻打印“hello world”到屏幕。
+
+
+### 6.3、代码示例
+
+~~~c
+//sem_product_consumer.c
+#include <stdlib.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <semaphore.h>
+
+#define NUM 5
+
+int queue[NUM];
+
+sem_t blank_number, product_number;
+
+void * producer(void *arg)
+{
+	int i = 0;
+	while(1)
+	{
+		sem_wait(&blank_number);
+		queue[i] = rand() % 1000 + 1;
+		printf("-----Producer---%d\n", queue[i]);
+		sem_post(&product_number);
+
+		i = (i + 1) % NUM;
+		sleep(rand() % 1);
+	}
+}
+
+void * consumer(void *arg)
+{
+	int i = 0;
+	while(1)
+	{
+		sem_wait(&product_number);
+		printf("Consumer--------%d\n", queue[i]);
+		queue[i] = 0;
+		sem_post(&blank_number);
+
+		i = (i + 1) % NUM;
+		sleep(rand() % 3);
+	}
+}
+
+int main()
+{
+	pthread_t pid, cid;
+
+	sem_init(&blank_number, 0, NUM);
+	sem_init(&product_number, 0, 0);
+
+	pthread_create(&pid, NULL, producer, NULL);
+	pthread_create(&cid, NULL, consumer, NULL);
+
+	pthread_join(pid, NULL);
+	pthread_join(cid, NULL);
+
+	sem_destroy(&blank_number);
+	sem_destroy(&product_number);
+
+	return 0;
+}
+
+~~~
+
+
+
+## 7、进程间同步
+互斥量mutex
+进程间也可以使用互斥锁，来达到同步的目的。但应在pthread_mutex_init初始化之前，修改其属性为进程间共享。mutex的属性修改函数主要有以下几个。
+
+主要应用函数：
+
+pthread_mutexattr_t mattr 类型： 用于定义mutex锁的【属性】
+
+pthread_mutexattr_init函数： 初始化一个mutex属性对象
+
+int pthread_mutexattr_init(pthread_mutexattr_t *attr);
+
+pthread_mutexattr_destroy函数： 销毁mutex属性对象 (而非销毁锁)
+
+int pthread_mutexattr_destroy(pthread_mutexattr_t *attr);
+
+pthread_mutexattr_setpshared函数： 修改mutex属性。
+
+int pthread_mutexattr_setpshared(pthread_mutexattr_t *attr, int pshared);
+
+参2：pshared取值：
+
+线程锁：PTHREAD_PROCESS_PRIVATE (mutex的默认属性即为线程锁，进程间私有)
+
+进程锁：PTHREAD_PROCESS_SHARED
+
+进程间mutex示例
 ————————————————
 版权声明：本文为CSDN博主「walkingLL」的原创文章，遵循CC 4.0 BY-SA版权协议，转载请附上原文出处链接及本声明。
 原文链接：https://blog.csdn.net/happiness_llz/article/details/82781575
-
-
 
 
 Bus error(coredump)
