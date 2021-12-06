@@ -6099,6 +6099,356 @@ int main()
 - 优点: 提高了程序的执行效率
 - 缺点: 需要占用更多的cpu和系统资源
 
+### 3.2、select
+
+#### 3.2.1、基本概念
+
+（1）首先分析select的工作原理
+
+- select能监听的文件描述符个数受限于FD_SETSIZE,一般为1024，单纯改变进程打开的文件描述符个数并不能改变select监听文件个数。
+- 解决1024以下客户端时使用select是很合适的，但如果链接客户端过多，select采用的是轮询模型，会大大降低服务器响应效率，不应在select上投入更多精力。
+
+（2）使用select函的优缺点:
+
+- 优点：
+
+​          跨平台
+
+- 缺点：
+
+​          a. 每次调用select，都需要把fd集合从用户态拷贝到内核态，这个开销在fd很多时会很大；
+
+​          b. 同时每次调用select都需要在内核遍历传递进来的所有fd，这个开销在fd很多时也很大；
+
+​          c. select支持的文件描述符数量太小了，默认是1024。
+
+   为什么是1024？
+
+~~~c
+首先，看下内核中对fd_set的定义：
+typedef struct {
+    unsigned long fds_bits[__FDSET_LONGS];
+} __kernel_fd_set;
+
+typedef __kernel_fd_set fd_set;
+
+其中有关的常量定义为：
+#undef __NFDBITS
+#define __NFDBITS (8 * sizeof(unsigned long))
+
+#undef __FD_SETSIZE
+#define __FD_SETSIZE 1024
+
+#undef __FDSET_LONGS
+#define __FDSET_LONGS (__FD_SETSIZE/__NFDBITS)
+
+即__NFDBITS为8*4=32，__FD_SETSIZE为1024，那么，__FDSET_LONGS为1024/32=32，因此，fd_set实际上是32个无符号长整形，也就是1024位
+~~~
+
+select相关函数
+
+~~~c
+#include <sys/select.h>
+/* According to earlier standards */
+#include <sys/time.h>
+#include <sys/types.h>
+#include <unistd.h>
+int select(int nfds, fd_set *readfds, fd_set *writefds,
+            fd_set *exceptfds, struct timeval *timeout);
+
+    nfds:         监控的文件描述符集里最大文件描述符加1，因为此参数会告诉内核检测前多少个文件描述符的状态
+    readfds：    监控有读数据到达文件描述符集合，传入传出参数
+    writefds：    监控写数据到达文件描述符集合，传入传出参数
+    exceptfds：    监控异常发生达文件描述符集合,如带外数据到达异常，传入传出参数
+    timeout：    定时阻塞监控时间，3种情况
+                1.NULL，永远等下去
+                2.设置timeval，等待固定时间
+                3.设置timeval里时间均为0，检查描述字后立即返回，轮询
+    struct timeval {
+        long tv_sec; /* seconds */
+        long tv_usec; /* microseconds */
+    };
+    void FD_CLR(int fd, fd_set *set);     //把文件描述符集合里fd清0
+    int FD_ISSET(int fd, fd_set *set);     //测试文件描述符集合里fd是否置1
+    void FD_SET(int fd, fd_set *set);     //把文件描述符集合里fd位置1
+    void FD_ZERO(fd_set *set);             //把文件描述符集合里所有位清0
+~~~
+
+#### 3.2.2、代码示例
+
+~~~c
+//server_select.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <arpa/inet.h>
+#include <ctype.h>
+#include "wrap.h"
+
+#define SERV_PROT 8888
+
+int main()
+{
+	int i, j, maxi;
+
+	int nready, client[FD_SETSIZE];
+	int maxfd, listenfd, connfd, sockfd;
+	char buf[BUFSIZ], str[INET_ADDRSTRLEN];
+
+	int n;
+
+	struct sockaddr_in clie_addr, serv_addr;
+	socklen_t clie_addr_len;
+	fd_set rset, allset;
+
+	listenfd = Socket(AF_INET, SOCK_STREAM, 0);
+
+	bzero(&serv_addr, sizeof(serv_addr));
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_port = htons(SERV_PROT);
+	serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+	Bind(listenfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
+	Listen(listenfd, 20);
+
+	maxfd = listenfd;
+
+	maxi = -1;
+	for(i = 0; i < FD_SETSIZE; i++)
+	{
+		client[i] = -1;
+	}
+	FD_ZERO(&allset);
+	FD_SET(listenfd, &allset);
+
+	while(1)
+	{
+		rset = allset;
+		nready = select(maxfd + 1, &rset, NULL, NULL, NULL);
+		if(nready < 0)
+		{
+			perr_exit("select error");
+		}
+		if(FD_ISSET(listenfd, &rset))
+		{
+			clie_addr_len = sizeof(clie_addr);
+			connfd = Accept(listenfd, (struct sockaddr *)&clie_addr, &clie_addr_len);
+			printf("received from %s at PORT %d\n",
+						inet_ntop(AF_INET, &clie_addr.sin_addr, str, sizeof(str)),
+						ntohs(clie_addr.sin_port));
+			for(i = 0; i < FD_SETSIZE; i++)
+			{
+				if(client[i] < 0)
+				{
+					client[i] = connfd;
+					break;
+				}
+			}
+			if(i == FD_SETSIZE){
+				fputs("too many clients\n", stderr);
+				exit(1);
+			}
+
+			FD_SET(connfd, &allset);
+			if(connfd > maxfd)
+			{
+				maxfd = connfd;
+			}
+			if(i > maxi)
+			{
+				maxi = i;
+			}
+			if(--nready == 0)
+			  continue;
+		}
+
+		for(i = 0; i <= maxi; i++)
+		{
+			if((sockfd =  client[i]) < 0)
+			  continue;
+			if(FD_ISSET(sockfd, &rset))
+			{
+				if((n = Read(sockfd, buf, sizeof(buf))) == 0)
+				{
+					Close(sockfd);
+					FD_CLR(sockfd, &allset);
+					client[i] = -1;
+				}
+				else if(n > 0)
+				{
+					for(j = 0; j < n; j++)
+					  buf[j] = toupper(buf[j]);
+					sleep(1);
+					Write(sockfd, buf, n);
+				}
+				if(--nready == 0)
+				  break;
+			}
+		}
+	}
+	Close(listenfd);
+	return 0;
+}
+
+~~~
+
+
+
+### 3.3、poll
+
+#### 3.3.1、基本概念
+
+~~~c
+#include <poll.h>
+int poll(struct pollfd *fds, nfds_t nfds, int timeout);
+    struct pollfd {
+        int fd; /* 文件描述符 */
+        short events; /* 监控的事件 */
+        short revents; /* 监控事件中满足条件返回的事件 */
+    };
+    POLLIN            普通或带外优先数据可读,即POLLRDNORM | POLLRDBAND
+    POLLRDNORM        数据可读
+    POLLRDBAND        优先级带数据可读
+    POLLPRI         高优先级可读数据
+    POLLOUT        普通或带外数据可写
+    POLLWRNORM        数据可写
+    POLLWRBAND        优先级带数据可写
+    POLLERR         发生错误
+    POLLHUP         发生挂起
+    POLLNVAL         描述字不是一个打开的文件
+    fds              数组地址
+    nfds             监控数组中有多少文件描述符需要被监控，数组的最大长度, 数组中最后一个使用的元素下标+1，内核会轮询检测fd数组的每个文件描述符
+
+    timeout         毫秒级等待
+        -1：阻塞等，#define INFTIM -1                 Linux中没有定义此宏
+        0：立即返回，不阻塞进程
+        >0：等待指定毫秒数，如当前系统时间精度不够毫秒，向上取值    返回值: IO发送变化的文件描述符的个数
+~~~
+
+#### 3.3.2、代码示例
+
+~~~c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <poll.h>
+#include <errno.h>
+#include <ctype.h>
+#include "wrap.h"
+
+#define MAXLINE 80
+#define OPEN_MAX 1024
+#define SERV_PROT 8888
+
+int main()
+{
+	int i, j, maxi, listenfd, connfd, sockfd;
+	int nready;
+	ssize_t n;
+
+	char buf[MAXLINE], str[INET_ADDRSTRLEN];
+	struct pollfd client[OPEN_MAX];
+	socklen_t clie_addr_len;
+	struct sockaddr_in clie_addr, serv_addr;
+
+	listenfd = Socket(AF_INET, SOCK_STREAM, 0);
+	int opt = 1;
+	setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+	bzero(&serv_addr, sizeof(serv_addr));
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_port = htons(SERV_PROT);
+	serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+	Bind(listenfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
+	Listen(listenfd, 20);
+
+	client[0].fd = listenfd;
+	client[0].events = POLLIN;
+
+	for(i = 1; i < OPEN_MAX; i++)
+		client[i].fd = -1;
+
+	maxi = 0;
+
+	for(;;)
+	{
+		nready = poll(client, maxi + 1, -1);
+		printf("get message maxi = %d\n", maxi);
+		if(nready < 0)
+		{
+			perr_exit("select error");
+		}
+		if(client[0].revents & POLLIN)
+		{
+			clie_addr_len = sizeof(clie_addr);
+			connfd = Accept(listenfd, (struct sockaddr *)&clie_addr, &clie_addr_len);
+			printf("received from %s at PORT %d\n",
+						inet_ntop(AF_INET, &clie_addr.sin_addr, str, sizeof(str)),
+						ntohs(clie_addr.sin_port));
+			for(i = 1; i < OPEN_MAX; i++)
+			{
+				if(client[i].fd < 0)
+				{
+					client[i].fd = connfd;
+					break;
+				}
+			}
+			if(i == OPEN_MAX){
+				perr_exit("too many clients");
+			}
+
+			client[i].events = POLLIN;
+			if(i > maxi)
+			{
+				maxi = i;
+			}
+			if(--nready <= 0)
+			  continue;
+		}
+
+		for(i = 1; i <= maxi; i++)
+		{
+			if((sockfd =  client[i].fd) < 0)
+			  continue;
+			if(client[i].revents & POLLIN);
+			{
+				if((n = Read(sockfd, buf, sizeof(buf))) < 0)
+				{
+					if(errno == ECONNRESET) //收到RST标志
+					{
+						Close(sockfd);
+						client[i].fd = -1;
+					}
+					else
+					  perr_exit("read error");
+				}
+				else if(n == 0)
+				{
+					printf("client[%d] closed connection\n", i);
+					Close(sockfd);
+					client[i].fd = -1;
+				}
+				else
+				{
+					for(j = 0; j < n; j++)
+					  buf[j] = toupper(buf[j]);
+					Write(sockfd, buf, n);
+				}
+				if(--nready <= 0)
+				  break;
+			}
+		}
+	}
+	Close(listenfd);
+	return 0;
+}
+
+~~~
+
 
 
 Bus error(coredump)
