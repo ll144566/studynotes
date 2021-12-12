@@ -1,0 +1,37 @@
+进程是资源分配的最小单位，线程是运行调度的最小单位。
+ps -eFH
+查看进程组ps -ejH
+查看进程组ps -ajx
+
+
+会话id ps axjf 
+ldd ./myapp 查看myapp依赖的库
+time ./alarm 获取程序执行时间
+
+
+cvt 2880 1800
+
+打开终端：
+sudo rm -f ~/.config/monitors.xml  
+sudo apt-get install screen
+重启系统
+
+
+Win+Shift+S组合键
+
+
+/robots.txt
+
+
+
+关于stack around the variable “” was corrupted问题
+把“project->配置属性->c/c++->代码生成->基本运行时检查 设置为默认值，就没有这样的错误了。
+
+
+
+
+ulimit -n 文件描述符限制
+
+vim /etc/rsyslog.conf
+*.* @192.168.0.107
+service rsyslog restart

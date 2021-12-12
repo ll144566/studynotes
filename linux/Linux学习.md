@@ -9,24 +9,16 @@
 
 
 ~~~markdown
--E: 预处理，主要是进行宏展开等步骤，生成的文件微test.i
+（1）预处理（cpp）gcc -E（输出问价通常以 .i 结尾），将头文件展开，宏替换等操作；
 
-gcc -E test.c
+（2）编译器（gcc）gcc -S（输出问价以 .s 结尾）生成汇编代码；
 
--S: 编译，生成汇编代码，生成的文件为test.S
+（3）汇编器（as）gcc -c（输出文件以 .o 结尾）将汇编编译成二进制文件；
 
-gcc -S test.c
-
--c: 汇编：生成机器码，生成的文件未test.o
-
-gcc -c test.c
-
-(-o): 链接：生成可执行文件
-
-gcc test.c (-o test)
+（4）连接器（ld）gcc，链接 lib 库生成可执行文件。
 
 gcc -D test.c：在编译的时候定义宏
-gcc -I test.c：指定头文件的路径
+gcc -I test.c：指定头文件的路径 -I与头文件路径中间的空格可加可不加
 gcc -g test.c：gdb调试的时候需要添加该参数
 gcc -O test.c：编译优化，3个等级（1-3）
 gcc -Wall test.c: 编译期间输出警告信息
@@ -34,8 +26,19 @@ gcc -Wall test.c: 编译期间输出警告信息
 
 [Linux位置无关代码实现,浅谈位置无关代码](https://blog.csdn.net/weixin_39521520/article/details/116880453)
 
-
 静态库的制作和使用
+
+1）命名规则
+    lib + 库的名字 + .a
+    例如：libmytest.a
+2）制作步骤:
+     1). 生成对应的.o文件 -- .c --> .o  -c
+     2). 将生成的.o文件打包  ar rcs + 静态库的名字(libMytest.a) + 生成的所有的.o
+3）发布和使用静态库:
+     1). 发布静态库
+     2). 头文件
+
+4）nm  libMyCal.a查看库中的函数
 
 ~~~shell
 # 制作
@@ -48,12 +51,13 @@ gcc main.c lib/libMyCalc.a -o sum -Iinclude
 
 # 方式2
 gcc main.c -I include -L lib -l MyCalc -o myapp
+# -L指定库路径， -l 选择需要的库（库名需要去掉lib和.a）
 ~~~
 
 动态库的制作和使用
 
 ~~~shell
-gcc -fPIC -c *.c -I ../include/
+gcc -fPIC -c *.c -I ../include/ #fPIC 与位置无关
 gcc -shared -o libMyCal.so *.o -I ../include/
 
 # 第一种方式
@@ -65,6 +69,10 @@ gcc main.c  -Iinclude -L./lib -lMyCal -o myapp
 #ldd ./myapp 查看myapp依赖的库
 ~~~
 
+<font color = "red">ldd ./myapp 查看myapp依赖的库  </font>
+
+<font color = "red">echo $PATH查看环境变量</font>
+
 使用（第二种方式生产的可执行文件）
 
 `./myapp: error while loading shared libraries: libMyCal.so: cannot open shared object file: No such file or directory`
@@ -73,13 +81,15 @@ gcc main.c  -Iinclude -L./lib -lMyCal -o myapp
 
 1. `sudo cp lib/libMyCal.so /lib`不推荐；
 2. `export LD_LIBRARY_PATH=./lib` ./lib指动态链接库的路径，仅对当前终端有效，可用于临时测试；
-3. 在家目录的`.bashrc`文件中添加`export LD_LIBRARY_PATH=./lib`；
+3. 在家目录的`.bashrc`文件中添加`export LD_LIBRARY_PATH=./lib`，不常用；
 4. 修改动态链接器的配置文件
    - `sudo vim /etc/ld.so.conf`,
    - 添加动态链接库路径，如`/home/apricity/CLearn/Calc/lib`
    - `sudo ldconfig -v`（-v 提示信息，可不加）。
 
 
+
+usr/bin
 
 # gdb
 
@@ -6350,18 +6360,19 @@ int main()
 	ssize_t n;
 
 	char buf[MAXLINE], str[INET_ADDRSTRLEN];
-	struct pollfd client[OPEN_MAX];
 	socklen_t clie_addr_len;
+	struct pollfd client[OPEN_MAX];
 	struct sockaddr_in clie_addr, serv_addr;
 
 	listenfd = Socket(AF_INET, SOCK_STREAM, 0);
+
 	int opt = 1;
 	setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
 	bzero(&serv_addr, sizeof(serv_addr));
 	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = htons(SERV_PROT);
 	serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	serv_addr.sin_port = htons(SERV_PROT);
 
 	Bind(listenfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
 	Listen(listenfd, 20);
@@ -6377,11 +6388,6 @@ int main()
 	for(;;)
 	{
 		nready = poll(client, maxi + 1, -1);
-		printf("get message maxi = %d\n", maxi);
-		if(nready < 0)
-		{
-			perr_exit("select error");
-		}
 		if(client[0].revents & POLLIN)
 		{
 			clie_addr_len = sizeof(clie_addr);
@@ -6397,15 +6403,12 @@ int main()
 					break;
 				}
 			}
-			if(i == OPEN_MAX){
+			if(i == OPEN_MAX)
 				perr_exit("too many clients");
-			}
 
 			client[i].events = POLLIN;
 			if(i > maxi)
-			{
 				maxi = i;
-			}
 			if(--nready <= 0)
 			  continue;
 		}
@@ -6414,12 +6417,14 @@ int main()
 		{
 			if((sockfd =  client[i].fd) < 0)
 			  continue;
-			if(client[i].revents & POLLIN);
+
+			if(client[i].revents & POLLIN)
 			{
 				if((n = Read(sockfd, buf, sizeof(buf))) < 0)
 				{
 					if(errno == ECONNRESET) //收到RST标志
 					{
+                        printf("client[%d] aborted connection\n", i);
 						Close(sockfd);
 						client[i].fd = -1;
 					}
@@ -6447,6 +6452,520 @@ int main()
 	return 0;
 }
 
+~~~
+
+###    3.4、epoll
+
+  epoll是Linux下多路复用IO接口select/poll的增强版本，它能显著提高程序在大量并发连接中只有少量活跃的情况下的系统CPU利用率，因为它会复用文件描述符集合来传递结果而不用迫使开发者
+
+每次等待事件之前都必须重新准备要被侦听的文件描述符集合（用户态和内核态共享同一片文件描述符表内存），另一点原因就是获取事件的时候，它无须遍历整个被侦听的描述符集，只要遍历那
+
+些被内核IO事件异步唤醒而加入Ready队列的描述符集合就行了。
+
+  目前epell是linux大规模并发网络程序中的热门首选模型。
+
+  epoll除了提供select/poll那种IO事件的电平触发（Level Triggered）外，还提供了边沿触发（Edge Triggered），这就使得用户空间程序有可能缓存IO状态，减少epoll_wait/epoll_pwait的调用，提
+
+高应用程序效率。
+
+  可以使用cat命令查看一个进程可以打开的socket描述符上限。
+
+```shell
+cat /proc/sys/fs/file-max
+```
+
+  如有需要，可以通过修改配置文件的方式修改该上限值。
+
+```shell
+sudo vi /etc/security/limits.conf
+    在文件尾部写入以下配置,soft软限制，hard硬限制。
+    * soft nofile 65536
+    * hard nofile 100000
+```
+
+####   3.4.1、基础API
+
+   1）创建一个epoll句柄，参数size用来告诉内核监听的文件描述符的个数，跟内存大小有关。
+
+```c
+#include <sys/epoll.h>
+int epoll_create(int size)        size：监听数目, epoll上能关注的最大描述符数
+```
+
+   2）控制某个epoll监控的文件描述符上的事件：注册、修改、删除。
+
+~~~c
+#include <sys/epoll.h>
+    int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
+        epfd：    为epoll_creat的句柄
+        op：        表示动作，用3个宏来表示：
+            EPOLL_CTL_ADD (注册新的fd到epfd)，
+            EPOLL_CTL_MOD (修改已经注册的fd的监听事件)，
+            EPOLL_CTL_DEL (从epfd删除一个fd)；
+        event：    告诉内核需要监听的事件
+
+        struct epoll_event {
+            __uint32_t events; /* Epoll events */
+            epoll_data_t data; /* User data variable */
+        };
+        typedef union epoll_data {
+            void *ptr;
+            int fd;
+            uint32_t u32;
+            uint64_t u64;
+        } epoll_data_t;
+
+        EPOLLIN ：    表示对应的文件描述符可以读（包括对端SOCKET正常关闭）
+        EPOLLOUT：    表示对应的文件描述符可以写
+        EPOLLPRI：    表示对应的文件描述符有紧急的数据可读（这里应该表示有带外数据到来）
+        EPOLLERR：    表示对应的文件描述符发生错误
+        EPOLLHUP：    表示对应的文件描述符被挂断；
+        EPOLLET：     将EPOLL设为边缘触发(Edge Triggered)模式，这是相对于水平触发(Level Triggered)而言的
+        EPOLLONESHOT：只监听一次事件，当监听完这次事件之后，如果还需要继续监听这个socket的话，需要再次把这个socket加入到EPOLL队列里
+~~~
+
+   3）等待所监控文件描述符上有事件的产生，类似于select()调用。
+
+~~~c
+#include <sys/epoll.h>
+    int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
+        events：        用来存内核得到事件的集合，用于回传待处理事件的数组
+        maxevents：    告之内核这个events有多大，这个maxevents的值不能大于创建epoll_create()时的size
+        timeout：    是超时时间
+            -1：    阻塞
+            0：    立即返回，非阻塞
+            >0：    指定毫秒
+        返回值：    成功返回有多少文件描述符就绪，时间到时返回0，出错返回-1
+~~~
+
+### 3.4.2、代码示例
+
+~~~c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <sys/epoll.h>
+#include <errno.h>
+#include <ctype.h>
+#include "wrap.h"
+
+#define MAXLINE 80
+#define OPEN_MAX 1024
+#define SERV_PROT 8888
+
+int main()
+{
+	int i, j, listenfd, connfd, sockfd;
+	int n, num = 0;
+	ssize_t nready, efd, res;
+
+	char buf[MAXLINE], str[INET_ADDRSTRLEN];
+	socklen_t clie_addr_len;
+	struct sockaddr_in clie_addr, serv_addr;
+	struct epoll_event tep, ep[OPEN_MAX];
+
+	listenfd = Socket(AF_INET, SOCK_STREAM, 0);
+
+	int opt = 1;
+	setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+	bzero(&serv_addr, sizeof(serv_addr));
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	serv_addr.sin_port = htons(SERV_PROT);
+
+	Bind(listenfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
+	Listen(listenfd, 20);
+
+	efd = epoll_create(OPEN_MAX);
+	if(efd == -1)
+	  perr_exit("epoll_create error");
+
+	tep.events = EPOLLIN;
+	tep.data.fd = listenfd;
+	res = epoll_ctl(efd, EPOLL_CTL_ADD, listenfd, &tep);
+	if(res == -1)
+	  perr_exit("epoll_ctl error");
+
+
+	for(;;)
+	{
+		nready = epoll_wait(efd, ep, OPEN_MAX, -1);
+		if(nready == -1)
+		  perr_exit("epoll_wait error");
+		for(i = 0; i < nready; i++)
+		{
+			if(!(ep[i].events & EPOLLIN))
+			  continue;
+			if(ep[i].data.fd == listenfd)
+			{
+				connfd = Accept(listenfd, (struct sockaddr *)&clie_addr, &clie_addr_len);
+				printf("received from %s at PORT %d\n",
+							inet_ntop(AF_INET, &clie_addr.sin_addr, str, sizeof(str)),
+							ntohs(clie_addr.sin_port));
+				printf("cfd %d---client %d\n", connfd, ++num);
+				tep.events = EPOLLIN;
+				tep.data.fd = connfd;
+				res = epoll_ctl(efd, EPOLL_CTL_ADD, connfd, &tep);
+				if(res == -1)
+				  perr_exit("epoll_ctl error");
+			}
+			else
+			{
+				sockfd = ep[i].data.fd;
+				if((n = Read(sockfd, buf, sizeof(buf))) < 0)
+				{
+					if(errno == ECONNRESET) //收到RST标志
+					{
+						perror("read n < 0 error");
+						if(res == -1)
+						  perr_exit("epoll_ctl error");
+						Close(sockfd);
+					}
+					else
+					  perr_exit("read error");
+				}
+				else if(n == 0)
+				{
+					res = epoll_ctl(efd, EPOLL_CTL_DEL, sockfd, NULL);
+					if(res == -1)
+					  perr_exit("epoll_ctl error");
+					printf("client[%d] closed connection\n", i);
+					Close(sockfd);
+				}
+				else
+				{
+					for(j = 0; j < n; j++)
+					  buf[j] = toupper(buf[j]);
+					Write(sockfd, buf, n);
+				}
+				if(--nready <= 0)
+				  break;
+
+			}
+		}
+
+	}
+	Close(listenfd);
+	return 0;
+}
+
+~~~
+
+
+
+## 4、epoll反应堆实现并发服务器
+
+[EPOLL反应堆](https://blog.csdn.net/u013467105/article/details/52357495)
+
+[参考](https://blog.csdn.net/qq_39790992/article/details/92792760)
+
+fcntl
+
+ioctsocket
+
+~~~c
+#include <stdio.h>
+#include <sys/socket.h>
+#include <sys/epoll.h>
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
+#include <stdlib.h>
+#include <time.h>
+ 
+#define MAX_EVENTS  512
+#define SERVER_PORT 8888
+ 
+struct my_events {
+   
+    int        m_fd;                                         //监听的文件描述符
+    int        m_event;                                      //监听的事件
+    int        m_status;                                     //是否在红黑树上, 1->在, 0->不在
+    time_t     m_lasttime;                                   //最后放入红黑树的时间  
+    void       *m_arg;                                       //泛型参数
+    void       (*call_back)(int fd, int event, void *arg);   //回调函数
+    char       m_buf[BUFSIZ];
+    int        m_buf_len;
+};
+ 
+ 
+int                    ep_fd;                                //红黑树根
+struct my_events       ep_events[MAX_EVENTS];   
+ 
+ 
+/* 函数原型 */
+ 
+/*初始化监听socket*/
+void initlistensocket(int ep_fd, unsigned short port);
+/*将结构体成员变量初始化*/
+void eventsetinit(struct my_events *my_ev, int fd, void (*call_back)(int fd, int event, void *arg), void *event_arg);
+/*向红黑树添加 文件描述符和对应的结构体*/
+void eventadd(int ep_fd, int event, struct my_events *my_ev);
+/*从红黑树上删除 文件描述符和对应的结构体*/
+void eventdel(int ep_fd, struct my_events *ev);
+/*发送数据*/
+void senddata(int client_fd, int event, void *arg);
+/*接收数据*/
+void recvdata(int client_fd, int event, void *arg);
+/*回调函数: 接收连接*/
+void acceptconnect(int listen_fd, int event, void *arg);
+ 
+ 
+int main()
+{
+   unsigned short port = SERVER_PORT;
+ 
+   ep_fd = epoll_create(MAX_EVENTS);                         //创建红黑树,返回给全局变量ep_fd;
+   if (ep_fd <= 0)
+      printf("create ep_fd in %s error: %s \n", __func__, strerror(errno));
+   
+   /*初始化监听socket*/
+   initlistensocket(ep_fd, port);
+ 
+   int checkpos = 0;
+   int i;
+   struct epoll_event events[MAX_EVENTS];
+   while (1)
+   {
+      /*超时验证,每次100个,60s内没有和服务器通信则关闭客户端连接*/
+      long now = time(NULL);            //当前时间
+      for (i=0; i<MAX_EVENTS; i++,checkpos++)
+      {
+         if (checkpos == MAX_EVENTS-1)
+             checkpos = 0;
+         if (ep_events[i].m_status != 1)
+             continue;
+ 
+         long spell_time = now - ep_events[i].m_lasttime;       //客户端不活跃的时间
+         if (spell_time >= 60)
+         {
+             printf("[fd= %d] timeout \n", ep_events[i].m_fd);  
+             close(ep_events[i].m_fd);
+             eventdel(ep_fd, &ep_events[i]);
+         }
+         
+      }
+      /*监听红黑树,将满足条件的文件描述符加至ep_events数组*/
+      int n_ready = epoll_wait(ep_fd, events, MAX_EVENTS, 1000); //1秒没事件满足则返回0
+      if (n_ready < 0)
+      {
+          printf("epoll_wait error, exit \n");
+          break;
+      }
+     // if (n_ready == 0)
+     //     printf("\n n_ready == 0 \n");      
+ 
+      for (i=0; i<n_ready; i++)
+      {
+           struct my_events *ev = (struct my_events *)events[i].data.ptr;
+           if ((events[i].events & EPOLLIN) && (ev->m_event & EPOLLIN))  //读就绪事件
+               ev->call_back(ev->m_fd, events[i].events, ev->m_arg);
+           if ((events[i].events & EPOLLOUT) && (ev->m_event & EPOLLOUT)) //写就绪事件
+               ev->call_back(ev->m_fd, events[i].events, ev->m_arg);
+      }
+   }
+ 
+}     
+ 
+ 
+/*初始化监听socket*/
+void initlistensocket(int ep_fd, unsigned short port)
+{
+   int                  listen_fd;
+   struct sockaddr_in   listen_socket_addr;
+  
+   printf("\n initlistensocket() \n");  
+  
+  int opt = 1;
+  setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));      //端口复用
+ 
+  /*申请一个socket*/
+   listen_fd = socket(AF_INET, SOCK_STREAM, 0);
+   fcntl(listen_fd, F_SETFL, O_NONBLOCK);                     //将socket设置为非阻塞模式,好处自行百度
+   /*绑定前初始化*/
+   bzero(&listen_socket_addr, sizeof(listen_socket_addr));
+   listen_socket_addr.sin_family      = AF_INET;
+   listen_socket_addr.sin_port        = htons(port);
+   listen_socket_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+   /*绑定*/
+   bind(listen_fd, (struct sockaddr *)&listen_socket_addr, sizeof(listen_socket_addr));
+   /*设置监听上限*/
+   listen(listen_fd, 128);
+ 
+   /*将listen_fd初始化*/
+   eventsetinit(&ep_events[MAX_EVENTS-1], listen_fd, acceptconnect, &ep_events[MAX_EVENTS-1]);    
+   /*将listen_fd挂上红黑树*/
+   eventadd(ep_fd, EPOLLIN, &ep_events[MAX_EVENTS-1]);
+ 
+   return ;
+}
+ 
+ 
+ 
+ 
+/*将结构体成员变量初始化*/
+void eventsetinit(struct my_events *my_ev, int fd, void (*call_back)(int fd, int event, void *arg), void *event_arg)
+{
+   my_ev->m_fd       = fd;
+   my_ev->m_event    = 0;
+   my_ev->m_status   = 0;
+   my_ev->m_lasttime = time(NULL);
+   my_ev->m_arg      = event_arg;
+   my_ev->call_back  = call_back;
+ 
+   return ;
+}
+/*向红黑树添加 文件描述符和对应的结构体*/
+void eventadd(int ep_fd, int event, struct my_events *my_ev)
+{
+  int op;
+  struct epoll_event epv;
+  epv.data.ptr = my_ev;
+  epv.events   = my_ev->m_event = event;
+   
+  if (my_ev->m_status == 0)
+  {
+      op = EPOLL_CTL_ADD;
+  }
+  else
+  {
+    printf("\n add error: already on tree \n");
+    return ;
+  }
+ 
+  if (epoll_ctl(ep_fd, op, my_ev->m_fd, &epv) < 0)
+  {
+     printf("\n event add false [fd= %d] [events= %d] \n", my_ev->m_fd, my_ev->m_event);
+  }
+  else
+  {
+     my_ev->m_status = 1;
+     printf("\n event add ok [fd= %d] [events= %d] \n", my_ev->m_fd, my_ev->m_event);
+  }
+ 
+  return ;
+}
+/*从红黑树上删除 文件描述符和对应的结构体*/
+void eventdel(int ep_fd, struct my_events *ev)
+{
+  if(ev->m_status != 1)
+     return ;
+ 
+  epoll_ctl(ep_fd, EPOLL_CTL_DEL, ev->m_fd, NULL);
+  ev->m_status = 0;
+  
+  return ;
+}
+ 
+ 
+ 
+/*回调函数: 接收连接*/
+void acceptconnect(int listen_fd, int event, void *arg)
+{
+  int                 connect_fd;
+  int                 i;
+  int                 flag=0;
+  char                str[BUFSIZ];
+  struct sockaddr_in  connect_socket_addr;
+  socklen_t           connect_socket_len;
+ 
+  if ( (connect_fd=accept(listen_fd, (struct sockaddr *)&connect_socket_addr, &connect_socket_len)) <0 )
+  {
+     if (errno != EAGAIN && errno != EINTR)
+        {/*暂时不处理*/}
+     printf("\n %s: accept, %s \n", __func__, strerror(errno));
+     return ;
+  }
+ 
+  do
+  {
+    for(i=0; i<MAX_EVENTS; i++)
+        if(ep_events[i].m_status == 0)
+           break;
+    if(i >= MAX_EVENTS)
+     {
+        printf("\n %s : max connect [%d] \n", __func__, MAX_EVENTS);
+        break;
+     }      
+     
+    /* 设置非阻塞 */
+    if((flag = fcntl(connect_fd, F_SETFL, O_NONBLOCK)) <0)
+    {
+       printf("\n %s: fcntl nonblocking false, %s \n", __func__, strerror(errno));
+       break;
+    }
+ 
+    eventsetinit(&ep_events[i], connect_fd, recvdata, &ep_events[i]);
+    eventadd(ep_fd, EPOLLIN, &ep_events[i]);
+ 
+  }while(0);
+ 
+   printf("\n new connection [%s:%d]  [time:%ld]  [pos:%d] \n", inet_ntop(AF_INET, &connect_socket_addr.sin_addr, str, sizeof(str)), 
+                                ntohs(connect_socket_addr.sin_port), ep_events[i].m_lasttime, i);
+   return ;
+}
+/*接收数据*/
+void recvdata(int client_fd, int event, void *arg)
+{
+  int              len;
+  struct my_events *ev = (struct my_events *)arg;
+ 
+  len = recv(client_fd, ev->m_buf, sizeof(ev->m_buf), 0);
+  //从红黑树拿下
+  eventdel(ep_fd, ev);                                      
+ 
+  if (len >0)
+  {
+      ev->m_buf_len      = len;
+      ev->m_buf[len] = '\0';           //手动添加结束标记
+      printf("\n Client[%d]: %s \n", client_fd, ev->m_buf);
+ 
+      eventsetinit(ev, client_fd, senddata, ev);            //放上红黑树,监听写事件
+      eventadd(ep_fd, EPOLLOUT, ev); 
+  }
+  else if (len == 0)
+  {
+      close(ev->m_fd);
+      eventdel(ep_fd, ev);
+      printf("\n [Client:%d] disconnection \n", ev->m_fd);
+  }
+  else
+  {
+      close(ev->m_fd);
+      eventdel(ep_fd, ev);
+      printf("\n error: [Client:%d] disconnection\n", ev->m_fd);
+  }
+  
+  return ;
+}
+/*发送数据*/
+void senddata(int client_fd, int event, void *arg)
+{
+  int              len; 
+  struct my_events *ev = (struct my_events *)arg;
+  
+  len = send(client_fd, ev->m_buf, ev->m_buf_len, 0);   //回写
+ 
+  if (len > 0)
+  {
+     printf("\n send[fd=%d], [len=%d] %s \n", client_fd, len, ev->m_buf);
+     eventdel(ep_fd, ev);
+     eventsetinit(ev, client_fd, recvdata, ev);
+     eventadd(ep_fd, EPOLLIN, ev);  
+  }
+  else
+  {
+     close(ev->m_fd);
+     eventdel(ep_fd, ev);
+     printf("\n send[fd=%d] error \n", client_fd);
+  }
+  return ;
+}
 ~~~
 
 
@@ -6508,7 +7027,7 @@ unlink()函数功能即为删除文件。执行unlink()函数会删除所给参�
 
 
 
-
+atoi
 
 
 
