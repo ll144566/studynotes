@@ -35,3 +35,8 @@ ulimit -n 文件描述符限制
 vim /etc/rsyslog.conf
 *.* @192.168.0.107
 service rsyslog restart
+
+
+visual studio
+先按 Ctrl - K 组合键，再按 Ctrl - C 组合键进行注释
+先按 Ctrl - K 组合键，再按 Ctrl - U 组合键即可取消注释
