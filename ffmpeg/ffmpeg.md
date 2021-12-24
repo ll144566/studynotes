@@ -208,11 +208,14 @@ ffmpeg -s 360x270 -pix_fmt yuv420p -i  2_test_360x270_50.yuv -pix_fmt rgb24  aaa
 ~~~c
 ffmpeg -i test.mp4 -pix_fmt bgra test.rgb
 ffmpeg -i test.mp4 -f s16le test.pcm
+    
+ffmpeg.exe -i v1080.mp4 -t 5 -s 240x128 -pix_fmt yuv420p out240x128.yuv
+    //-t 时长 -s尺寸 -pix_fmt格式
 ~~~
 
 
 
-
+<font color = "red">Renamed Qt GUI Application wizard to Qt Widgets Application (QTVSADDINBUG-589)</font>
 
 
 
