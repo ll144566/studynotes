@@ -138,16 +138,34 @@ AVFrame: 存储解码后数据(像素数据:YUV/RGB/PCM等)
 
 通过key_frame判断是否为关键帧。或者 enum AVPictureType pict_type;也行。
 
-### av_frame_get_buffer
+### 函数
+
+#### av_frame_get_buffer
 
 ~~~c
 int av_frame_get_buffer(AVFrame *frame, int align);
 Required buffer size alignment.  If equal to 0, alignment will be chosen automatically for the current CPU.  It is highly recommended to pass 0 here unless you know what you are doing.
 ~~~
 
-### [音频处理基本概念及音频重采样](https://www.cnblogs.com/jiayayao/p/8724663.html)
+### 变量
+
+#### data和linesize
+
+[音频处理基本概念及音频重采样](https://www.cnblogs.com/jiayayao/p/8724663.html)
+
+uint8_t *data[AV_NUM_DATA_POINTERS]：解码后原始数据（对视频来说是YUV，RGB，对音频来说是PCM） int linesize[AV_NUM_DATA_POINTERS]：data中“一行”数据的大小。注意：未必等于图像的宽，一般大于图像的宽。
 
 
+
+对于packed格式的数据（例如RGB24），会存到data[0]里面。
+
+对于planar格式的数据（例如YUV420P），则会分开成data[0]，data[1]，data[2]...（YUV420P中data[0]存Y，data[1]存U，data[2]存V）
+
+
+
+ 以双声道为例，带P（plane）的数据格式在存储时，其左声道和右声道的数据是分开存储的，左声道的数据存储在data[0]，右声道的数据存储在data[1]，每个声道的所占用的字节数为linesize[0]和linesize[1]；
+
+  不带P（packed）的音频数据在存储时，是按照LRLRLR...的格式交替存储在data[0]中，linesize[0]表示总的数据量。
 
 # 函数
 
@@ -355,3 +373,79 @@ Cr：反映了RGB输入信号红色部分与RGB信号亮度值之间的差异。
 
 [音视频编解码](https://blog.csdn.net/wanggao_1990/category_10981719.html)
 
+
+
+
+
+# 创建和释放
+
+av_read_frame()
+
+av_packet_free()
+
+
+
+avformat_close_input() 
+
+avformat_open_input()
+
+
+
+编码器
+
+avcodec_open2
+
+avcodec_close();
+
+
+
+编码器上下文AVCodecContext
+
+avcodec_alloc_context3
+
+avcodec_free_context
+
+
+
+
+
+视频重采样上下文
+
+sws_getCachedContext
+
+sws_freeContext
+
+
+
+视频输出
+
+avio_open
+
+avio_close
+
+
+
+AVCodecParameters
+
+avcodec_parameters_alloc
+
+avcodec_parameters_free
+
+
+
+
+
+av_frame_alloc
+
+av_frame_unref(frame);//减少引用次数
+av_frame_free(&frame);//释放
+
+
+
+SwrContext 
+
+swr_alloc
+
+swr_init
+
+swr_free
