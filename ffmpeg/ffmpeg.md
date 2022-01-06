@@ -2,11 +2,11 @@
 
 ## AVFormatContext
 
-关闭一个AVFormatContext，和avformat_open_input()成对使用。声明位于libavformat\avformat.h
+&emsp;&emsp;关闭一个AVFormatContext，和avformat_open_input()成对使用。声明位于libavformat\avformat.h
 
 **avformat_find_stream_info()**
 
-经过avformat_open_input()调用后已经解析一部分的码流编码信息，但可能不完整不正确。需要进一步调用此函数读取一部分视音频数据并且获得更加完善的编码信息，特别是对于一些无文件头的输入是必要的。
+&emsp;&emsp;经过avformat_open_input()调用后已经解析一部分的码流编码信息，但可能不完整不正确。需要进一步调用此函数读取一部分视音频数据并且获得更加完善的编码信息，特别是对于一些无文件头的输入是必要的。
 
 ## AVCodecContext
 
@@ -62,7 +62,7 @@ AVPacket* avPacket = av_packet_alloc(); // 初始化
 av_packet_unref(avPacket); // 清理
 ~~~
 
-没什么稀奇，都是调用特定的函数来处理。这里需要提一下，虽然在第一小节提到，AVPacket是可以在栈内存上分配，也就是这样：AVPacket avPacket，但如非必要，我还是不建议这么做，毕竟有现成的API，就别给自己挖坑了。
+&emsp;&emsp;没什么稀奇，都是调用特定的函数来处理。这里需要提一下，虽然在第一小节提到，AVPacket是可以在栈内存上分配，也就是这样：AVPacket avPacket，但如非必要，我还是不建议这么做，毕竟有现成的API，就别给自己挖坑了。
 
 还有一个函数：
 
@@ -76,13 +76,13 @@ av_packet_unref(avPacket); // 清理
 >
 > 所有其他字段都是从src复制的。
 
-这个函数和av_packet_unref函数的作用刚好相反。我们详细了解一下这背后的故事：
+&emsp;&emsp;这个函数和av_packet_unref函数的作用刚好相反。我们详细了解一下这背后的故事：
 
-我们在一开始有提到AVPacket保存了数据buffer的地址，所以，它实际上并没有包含数据内存本身，只是在它的字段中，用了一个uint8_t *data;来保存数据buffer的地址。
+&emsp;&emsp;我们在一开始有提到AVPacket保存了数据buffer的地址，所以，它实际上并没有包含数据内存本身，只是在它的字段中，用了一个uint8_t *data;来保存数据buffer的地址。
 
-av_packet_ref函数的作用，就是从已有的AVPacket中复制一份出来。关于data部分，如果src的数据是引用计数的，直接把地址拷贝一份，然后把对应buffer的引用计数+1。如果不是，需要新分配一份保存数据的内存空间，并把src中的数据拷贝过来。
+&emsp;&emsp;av_packet_ref函数的作用，就是从已有的AVPacket中复制一份出来。关于data部分，如果src的数据是引用计数的，直接把地址拷贝一份，然后把对应buffer的引用计数+1。如果不是，需要新分配一份保存数据的内存空间，并把src中的数据拷贝过来。
 
-而av_packet_unref函数，则会看buffer的引用计数器，如果不为0就-1，为零的话则会清楚掉buffer，AVPacket的其它数据也会回到初始状态。
+&emsp;&emsp;而av_packet_unref函数，则会看buffer的引用计数器，如果不为0就-1，为零的话则会清楚掉buffer，AVPacket的其它数据也会回到初始状态。
 
 ### 结构定义及成员解读
 
@@ -136,7 +136,14 @@ AVFrame: 存储解码后数据(像素数据:YUV/RGB/PCM等)
 
 ### 判断AVFrame是否为关键帧
 
-通过key_frame判断是否为关键帧。或者 enum AVPictureType pict_type;也行。
+&emsp;&emsp;通过key_frame判断是否为关键帧。或者 enum AVPictureType pict_type;也行。
+
+### 音频帧大小计算
+
+&emsp;&emsp;假设音频采样率 = 8000，采样通道 = 2，位深度 = 16，采样间隔 = 20ms。
+
+&emsp;&emsp;首先我们计算一秒钟总的数据量，采样间隔采用20ms的话，说明每秒钟需采集50次，这个计算大家应该都懂，那么总的数据量计算为一秒钟总的数据量 =8000 * 2*16/8 = 32000，所以每帧音频数据大小 = 32000/50 = 640，每个通道样本数 = 640/2 = 320。
+
 
 ### 函数
 
@@ -157,15 +164,40 @@ uint8_t *data[AV_NUM_DATA_POINTERS]：解码后原始数据（对视频来说是
 
 
 
-对于packed格式的数据（例如RGB24），会存到data[0]里面。
+&emsp;&emsp;对于packed格式的数据（例如RGB24），会存到data[0]里面。
 
-对于planar格式的数据（例如YUV420P），则会分开成data[0]，data[1]，data[2]...（YUV420P中data[0]存Y，data[1]存U，data[2]存V）
+&emsp;&emsp;对于planar格式的数据（例如YUV420P），则会分开成data[0]，data[1]，data[2]...（YUV420P中data[0]存Y，data[1]存U，data[2]存V）
 
 
 
- 以双声道为例，带P（plane）的数据格式在存储时，其左声道和右声道的数据是分开存储的，左声道的数据存储在data[0]，右声道的数据存储在data[1]，每个声道的所占用的字节数为linesize[0]和linesize[1]；
+&emsp;&emsp;以双声道为例，带P（plane）的数据格式在存储时，其左声道和右声道的数据是分开存储的，左声道的数据存储在data[0]，右声道的数据存储在data[1]，每个声道的所占用的字节数为linesize[0]和linesize[1]；
 
-  不带P（packed）的音频数据在存储时，是按照LRLRLR...的格式交替存储在data[0]中，linesize[0]表示总的数据量。
+&emsp;&emsp;不带P（packed）的音频数据在存储时，是按照LRLRLR...的格式交替存储在data[0]中，linesize[0]表示总的数据量。
+
+
+
+#### nb_samples
+
+```c
+/**
+     * number of audio samples (per channel) described by this frame
+     */
+    int nb_samples;
+```
+
+音频帧中单个声道中包含的采样点数。
+
+[采样点数和采样频率的区别](https://blog.csdn.net/weixin_41554884/article/details/79799798)
+
+&emsp;&emsp;采样率决定了采样的精度。采样点数决定了每次传到pc内的数据量。比如点数设为1000，pc内会开辟初始大小1000的buffer（buffer大小可以自己改）, 板卡就每采1000点往pc传一次。程序每次从buffer读1000点进行处理。所以如果你每次处理需要更多数据，可以增加采样点数。采样率决定了采样的精度。采样点数决定了每次传到pc内的数据量。比如点数设为1000，pc内会开辟初始大小1000的buffer（buffer大小可以自己改）, 板卡就每采1000点往pc传一次。程序每次从buffer读1000点进行处理。所以如果你每次处理需要更多数据，可以增加采样点数。
+
+&emsp;&emsp;对于DAQ Assistance 来说，可以是N Sample或者是连续采样.对于N Sample,如果按照你说的采样点数为100,那么它只采100个点.但对于连续采样来说,如果采样点数为100,则代表它会一直采样,知道程序停止为止,不过是每采集够100个点就向PC机传送一次.另外,采样频率是指该通道每秒钟采样的点数.如果采样频率是1000,则代表它每秒钟采1000个点,如果采样点数为100,则每秒钟向PC机传送10次.不知道我讲明白了没有。
+
+&emsp;&emsp;你还可以这样理解：
+&emsp;&emsp;如果采样频率为１０００，采样点数也设为１０００，数据的更新率是1次/每秒。
+&emsp;&emsp;如果采样频率为１０００，采样点数也设为１００，数据的更新率是10次/每秒。
+
+
 
 # 函数
 
@@ -175,7 +207,7 @@ uint8_t *data[AV_NUM_DATA_POINTERS]：解码后原始数据（对视频来说是
 
 ## [FFmpeg: FFmepg中的sws_scale() 函数分析](https://www.cnblogs.com/yongdaimi/p/10715830.html)
 
-FFmpeg中的 sws_scale() 函数主要是用来做视频像素格式和分辨率的转换，其优势在于：可以在同一个函数里实现：1.图像色彩空间转换， 2:分辨率缩放，3:前后图像滤波处理。不足之处在于：效率相对较低，不如libyuv或shader，
+&emsp;&emsp;FFmpeg中的 sws_scale() 函数主要是用来做视频像素格式和分辨率的转换，其优势在于：可以在同一个函数里实现：1.图像色彩空间转换， 2:分辨率缩放，3:前后图像滤波处理。不足之处在于：效率相对较低，不如libyuv或shader，
 
 
 
