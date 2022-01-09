@@ -134,7 +134,7 @@ bool play2()
 	AVCodecContext* codec = 0;
 	AVFormatContext* ic = 0;
 	int videoStream = 0;
-	int audioStream = 1;a
+	int audioStream = 1;
 	av_register_all();
 	avcodec_register_all();
 	char url[] = "v1080.mp4";
