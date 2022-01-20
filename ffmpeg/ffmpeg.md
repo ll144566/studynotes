@@ -1,6 +1,6 @@
-# 结构体
+# 1、结构体
 
-## AVFormatContext
+## 1.1、AVFormatContext
 
 &emsp;&emsp;关闭一个AVFormatContext，和avformat_open_input()成对使用。声明位于libavformat\avformat.h
 
@@ -8,9 +8,9 @@
 
 &emsp;&emsp;经过avformat_open_input()调用后已经解析一部分的码流编码信息，但可能不完整不正确。需要进一步调用此函数读取一部分视音频数据并且获得更加完善的编码信息，特别是对于一些无文件头的输入是必要的。
 
-## AVCodecContext
+## 1.2、AVCodecContext
 
-### 变量
+### 1.2.1、变量
 
 ```c
 max_b_frames  
@@ -25,11 +25,11 @@ max_b_frames
 
 从注释中可以看出它指的是两个非B帧之间的B帧的最大数目。
 
-### 函数
+### 1.2.1、函数
 
 
 
-## AVPacket
+## 1.2、AVPacket
 
 [FFmpeg:AVPacket结构体分析](https://blog.csdn.net/qq_25333681/article/details/89743621)
 
@@ -55,7 +55,7 @@ max_b_frames
 - *data：媒体数据buffer的指针
 - duration：AVStream-> time_base单位中此数据包的持续时间，如果未知则为0。 在演示顺序中等于next_pts - this_pts。
 
-### 初始化与清理
+### 1.2.1、初始化与清理
 
 ~~~c
 AVPacket* avPacket = av_packet_alloc(); // 初始化
@@ -84,7 +84,7 @@ av_packet_unref(avPacket); // 清理
 
 &emsp;&emsp;而av_packet_unref函数，则会看buffer的引用计数器，如果不为0就-1，为零的话则会清楚掉buffer，AVPacket的其它数据也会回到初始状态。
 
-### 结构定义及成员解读
+### 1.2.2、结构定义及成员解读
 
 ~~~c
 typedef struct AVPacket {
@@ -121,7 +121,7 @@ av_packet_unref(pkt);
 
 
 
-## AVFrame
+## 1.3、AVFrame
 
 AVFrame 的用法：
 
@@ -134,18 +134,109 @@ AVFrame 的用法：
 AVPacket: 存储解码前数据(编码数据:H264/AAC等)
 AVFrame: 存储解码后数据(像素数据:YUV/RGB/PCM等)
 
-### 判断AVFrame是否为关键帧
+### 1.3.1、判断AVFrame是否为关键帧
 
 &emsp;&emsp;通过key_frame判断是否为关键帧。或者 enum AVPictureType pict_type;也行。
 
-### 音频帧大小计算
+### 1.3.2、音频帧大小计算
 
 &emsp;&emsp;假设音频采样率 = 8000，采样通道 = 2，位深度 = 16，采样间隔 = 20ms。
 
 &emsp;&emsp;首先我们计算一秒钟总的数据量，采样间隔采用20ms的话，说明每秒钟需采集50次，这个计算大家应该都懂，那么总的数据量计算为一秒钟总的数据量 =8000 * 2*16/8 = 32000，所以每帧音频数据大小 = 32000/50 = 640，每个通道样本数 = 640/2 = 320。
 
+### 1.3.3、存储方式
 
-### 函数
+https://www.cnblogs.com/my_life/articles/6841859.html
+
+#### 1、视频
+
+视频相对简单的多，以yuv420为例，图像数据在AVFrame中存储是这样的：
+
+data[0]存储Y
+
+data[1]存储U
+
+data[2]存储V
+
+而他们相对应的大小为：
+
+linesize[0]为Y的大小
+
+linesize[1]为U的大小
+
+linesize[2]为V的大小
+
+#### 2、音频
+
+音频数据则要复杂一些，**在音频中分为平面和非平面数据类型，**下面是音频数据类型的定义：
+
+ ~~~c
+ /** 
+  * Audio Sample Formats 
+  * 
+  * @par 
+  * The data described by the sample format is always in native-endian order. 
+  * Sample values can be expressed by native C types, hence the lack of a signed 
+  * 24-bit sample format even though it is a common raw audio data format. 
+  * 
+  * @par 
+  * The floating-point formats are based on full volume being in the range 
+  * [-1.0, 1.0]. Any values outside this range are beyond full volume level. 
+  * 
+  * @par 
+  * The data layout as used in av_samples_fill_arrays() and elsewhere in FFmpeg 
+  * (such as AVFrame in libavcodec) is as follows: 
+  * 
+  * For planar sample formats, each audio channel is in a separate data plane, 
+  * and linesize is the buffer size, in bytes, for a single plane. All data 
+  * planes must be the same size. For packed sample formats, only the first data 
+  * plane is used, and samples for each channel are interleaved. In this case, 
+  * linesize is the buffer size, in bytes, for the 1 plane. 
+  */  
+ enum AVSampleFormat {  
+     AV_SAMPLE_FMT_NONE = -1,  
+     AV_SAMPLE_FMT_U8,          ///< unsigned 8 bits  
+     AV_SAMPLE_FMT_S16,         ///< signed 16 bits  
+     AV_SAMPLE_FMT_S32,         ///< signed 32 bits  
+     AV_SAMPLE_FMT_FLT,         ///< float  
+     AV_SAMPLE_FMT_DBL,         ///< double  
+   
+     AV_SAMPLE_FMT_U8P,         ///< unsigned 8 bits, planar  
+     AV_SAMPLE_FMT_S16P,        ///< signed 16 bits, planar  
+     AV_SAMPLE_FMT_S32P,        ///< signed 32 bits, planar  
+     AV_SAMPLE_FMT_FLTP,        ///< float, planar  
+     AV_SAMPLE_FMT_DBLP,        ///< double, planar  
+   
+     AV_SAMPLE_FMT_NB           ///< Number of sample formats. DO NOT USE if linking dynamically  
+ }; 
+ ~~~
+
+定义中最后带p的为平面数据类型，可以用av_sample_fmt_is_planar来判断此数据类型是否是平面数据类型。
+
+ 
+
+**先说非平面数据：**
+
+以一个双声道（左右）音频来说，存储格式可能就为LRLRLR.........（左声道在前还是右声道在前没有认真研究过），数据都装在data[0]中，而大小则为linesize[0]。
+
+ 
+
+**平面数据：**
+
+就有点像视频部分的YUV数据，同样对双声道音频PCM数据，以S16P为例，存储就可能是
+plane 0: LLLLLLLLLLLLLLLLLLLLLLLLLL...
+plane 1: RRRRRRRRRRRRRRRRRRRR....
+
+对应的存储则为：
+
+data[0]存储plane 0
+
+data[1]存储plane 1
+
+**对应的大小则都为linesize[0]**，可以用av_get_bytes_per_sample(out_stream->codec->sample_fmt) * out_frame->nb_samples来算出plane的大小。
+
+
+### 1.3.4、函数
 
 #### av_frame_get_buffer
 
@@ -154,7 +245,7 @@ int av_frame_get_buffer(AVFrame *frame, int align);
 Required buffer size alignment.  If equal to 0, alignment will be chosen automatically for the current CPU.  It is highly recommended to pass 0 here unless you know what you are doing.
 ~~~
 
-### 变量
+### 1.3.5、变量
 
 #### data和linesize
 
@@ -199,9 +290,9 @@ uint8_t *data[AV_NUM_DATA_POINTERS]：解码后原始数据（对视频来说是
 
 
 
-# 函数
+# 2、函数
 
-## sws_scale
+## 2.1、sws_scale
 
 [FFmpeg: FFmepg中的sws_scale() 函数分析](https://www.cnblogs.com/yongdaimi/p/10715830.html)
 
@@ -225,7 +316,7 @@ uint8_t *data[AV_NUM_DATA_POINTERS]：解码后原始数据（对视频来说是
 
 
 
-# ffmpeg 命令
+# 3、ffmpeg 命令
 
 mp4转yuv
 
@@ -273,7 +364,7 @@ ffmpeg.exe -i v1080.mp4 -t 5 -s 240x128 -pix_fmt yuv420p out240x128.yuv
 
 调用了avformat_find_stream_info获取到的音视频流信息更完整
 
-# 音频
+# 4、音频
 
 ## 音频帧概念详解
 
