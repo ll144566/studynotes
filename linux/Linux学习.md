@@ -61,8 +61,7 @@ gcc -fPIC -c *.c -I ../include/ #fPIC 与位置无关
 gcc -shared -o libMyCal.so *.o -I ../include/
 
 # 第一种方式
-gcc main.c lib/libMyCal.so -o app -I include
-
+gcc main.c lib/libMy---
 # 第二种方式
 gcc main.c  -Iinclude -L./lib -lMyCal -o myapp
 
@@ -213,8 +212,6 @@ $(target):$(obj)
         $(CC) -c $< -o $@
 
 ~~~
-
-
 
 makefile中的函数
 
@@ -813,6 +810,8 @@ int mknod(const char *pathname, mode_t mode, dev_t dev);
 
 #### 1.2.2、示例
 
+
+
 ~~~c
 read
 #include <stdio.h>
@@ -827,7 +826,7 @@ read
 int main()
 {
 	const char*FIFO = "/tmp/fifo";
-	if(access(FIFO, F_OK) != 0)
+	if(access(FIFO, F_OK) != 0) 
 	{
 		if(mkfifo(FIFO, 0777) < 0)
 		{
@@ -1619,7 +1618,7 @@ sighandler_t signal(int signum, sighandler_t handler);
 
 #define SIG_ERR (void (*)())-1  //(void (*)())-1：表示将-1强制转换成void (*)()类型的函数指针
 #define SIG_DEL (void (*)())0
-#define SIG_IGN (void (*)())1
+#define (void (*)())1
 
 ```
 
@@ -4693,8 +4692,6 @@ int main(int argc, char *argv[])
 [TCP/IP四层模型及各层协议首部详述](https://blog.csdn.net/sty124578/article/details/79085608)
 
 [[Linux C编程之十六 网络编程基础-socket](https://www.cnblogs.com/xuejiale/p/10844445.html)](https://www.cnblogs.com/xuejiale/p/10844445.html)
-
-
 
 ## 1、协议的概念
 
